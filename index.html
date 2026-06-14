@@ -181,7 +181,7 @@
   <div class="sub" id="sub">구성원을 눌러 개인별 현황을 확인하세요</div>
   <div id="content"><div class="totalcard"><div class="label">가족 전체 평가금액</div>
         <div class="amount">₩88,695,216</div>
-        <div class="pl down">-11,146,428,163원 (-99.2%)</div></div>
+        <div class="pl down">-10,139,471,367원 (-99.1%)</div></div>
         <div class="sechead" style="margin-top:0">📈 시장 지수</div><div class="idxgrid"><div class="idxcard"><div class="ix-label">KOSPI</div><div class="ix-val">8,123.62</div><div class="ix-chg up">+4.63%</div></div><div class="idxcard"><div class="ix-label">NASDAQ</div><div class="ix-val">25,888.84</div><div class="ix-chg up">+0.31%</div></div><div class="idxcard"><div class="ix-label">S&amp;P 500</div><div class="ix-val">7,431.46</div><div class="ix-chg up">+0.50%</div></div><div class="idxcard"><div class="ix-label">USD/KRW</div><div class="ix-val">₩1,518</div><div class="ix-chg up">+0.13%</div></div></div>
         <div class="sechead">👨‍👩‍👧‍👦 구성원</div><div class="member" data-i="0" style="border-left:6px solid #56c7ff">
           <div class="m-left"><div class="avatar" style="background:#56c7ff26;color:#56c7ff;border:2px solid #56c7ff">여</div>
@@ -204,7 +204,7 @@
             <div><div class="m-name">새 구성원</div><div class="m-meta">0개 종목</div></div></div>
           <div class="m-right"><div><div class="m-val">₩0</div>
             <div class="m-pl flat">0.0%</div></div><div class="chev">›</div></div></div></div>
-  <div class="updated" id="updated">업데이트 오후 6:14:44 · 환율 ₩1,517/$</div>
+  <div class="updated" id="updated"><span class="spin"></span> 최신 시세 갱신 중...</div>
 </div>
 
 <div class="bar">
@@ -322,7 +322,7 @@ function saveState(){ state.v=DATA_VERSION; try{ localStorage.setItem('famstocks
 
 /* ===== Pantry 가족 공유 (클라우드 저장 + 주기적 동기화) ===== */
 const REMOTE = PANTRY_ID ? `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/familyStocks` : null;
-let remoteSuppress=false;
+let remoteSuppress=false, pulledOnce=false;
 function applyRemote(incoming){
   remoteSuppress=true;
   state = incoming; state.v=DATA_VERSION;
@@ -334,10 +334,11 @@ async function pullRemote(){
   if(!REMOTE) return;
   try{
     const r = await fetch(REMOTE, {cache:"no-store"});
-    if(r.status===400 || r.status===404){ pushRemote(); return; } // 클라우드에 없으면 현재 데이터로 생성
+    if(r.status===400 || r.status===404){ pulledOnce=true; pushRemote(); return; } // 클라우드에 없으면 현재 데이터로 생성
     if(!r.ok) return;
     const v = await r.json();
     if(!(v && v.members)) return;
+    pulledOnce=true;   // 클라우드를 정상적으로 읽음 → 이제부터 쓰기 허용
     const incoming = normalize(v);
     const a = JSON.stringify(Object.assign({}, incoming, {v:0}));
     const b = JSON.stringify(Object.assign({}, state, {v:0}));
@@ -345,7 +346,8 @@ async function pullRemote(){
   }catch(e){}
 }
 async function pushRemote(){
-  if(!REMOTE || remoteSuppress) return;
+  // 클라우드를 한 번도 정상 수신하지 못했으면 쓰지 않음(어머니 데이터 보호)
+  if(!REMOTE || remoteSuppress || !pulledOnce) return;
   try{
     await fetch(REMOTE, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(state)});
   }catch(e){}
@@ -390,7 +392,41 @@ function raceProxy(path){
   return raceURLs(urls, 6000);
 }
 
-function isCrypto(sym){ return /-USD$/i.test(sym) || /USDT$/i.test(sym); }
+function isUpbit(sym){ return /^(KRW|USDT|BTC)-[A-Z0-9]+$/i.test((sym||"")) && /^(KRW|USDT)-/i.test(sym); }
+function isCrypto(sym){ return isUpbit(sym) || /-USD$/i.test(sym) || /USDT$/i.test(sym); }
+
+// 업비트 API 호출 (직접 → 실패 시 프록시 폴백, CORS 회피)
+async function upbitGet(url){
+  try{ const r=await fetchT(url,7000); if(r.ok){ const t=await r.text(); if(t&&(t.trim()[0]==='['||t.trim()[0]==='{')) return JSON.parse(t); } }catch(e){}
+  return await raceProxyAbs(url);
+}
+// 코인(원화/USDT): 업비트 시세
+async function upbitQuote(market){
+  const a = await upbitGet(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(market)}`);
+  const d = a && a[0];
+  if(!d || d.trade_price==null) throw new Error("upbit");
+  const cur = /^KRW-/i.test(market) ? "KRW" : "USD";
+  return { price:d.trade_price, prevClose:(d.prev_closing_price||d.trade_price), currency:cur };
+}
+// 업비트 종목(코인) 목록 — 한글명 검색용 (1회 캐시)
+let _upbitMarkets=null;
+async function upbitMarkets(){
+  if(_upbitMarkets) return _upbitMarkets;
+  try{
+    const a = await upbitGet("https://api.upbit.com/v1/market/all?isDetails=false");
+    _upbitMarkets = (a||[]).filter(m=>/^KRW-/.test(m.market));
+  }catch(e){ _upbitMarkets=[]; }
+  return _upbitMarkets;
+}
+async function searchUpbit(q){
+  const list = await upbitMarkets();
+  const lq = q.trim().toLowerCase();
+  return list.filter(m=>
+    (m.korean_name||"").toLowerCase().includes(lq) ||
+    (m.english_name||"").toLowerCase().includes(lq) ||
+    m.market.toLowerCase().includes(lq)
+  ).slice(0,8).map(m=>({ symbol:m.market, name:m.korean_name||m.english_name||m.market, exch:"업비트", type:"coin" }));
+}
 
 // 코인: Binance 공개 API 직접 (CORS 허용, 프록시 불필요)
 async function binanceQuote(sym){
@@ -415,12 +451,11 @@ async function yahooChart(symbol){
   throw new Error("시세 없음");
 }
 
-// 통합 시세: 코인은 Binance 우선, 실패 시 Yahoo, 주식은 Yahoo
+// 통합 시세: 업비트 코인(원화) → 바이낸스 코인 → Yahoo 주식
 async function fetchQuote(symbol){
   const sym=(symbol||"").trim();
-  if(isCrypto(sym)){
-    try{ return await binanceQuote(sym); }catch(e){ /* fall through to yahoo */ }
-  }
+  if(isUpbit(sym)){ try{ return await upbitQuote(sym); }catch(e){} }
+  else if(isCrypto(sym)){ try{ return await binanceQuote(sym); }catch(e){} }
   return await yahooChart(sym);
 }
 
@@ -455,13 +490,33 @@ async function searchNaver(q){
   acc.forEach(o=>{
     const rc=(o.reutersCode||"");
     const isKR=(o.nationCode==="KOR")||/코스피|코스닥/.test(o.typeName||"")||/\.(KS|KQ)$/i.test(rc);
-    if(!isKR) return;
-    let sym;
-    if(/\.(KS|KQ)$/i.test(rc)) sym=rc.toUpperCase();
-    else { const kq=/코스닥|KOSDAQ/i.test((o.typeName||"")+(o.typeCode||"")); sym=o.code+(kq?".KQ":".KS"); }
-    if(seen.has(sym)) return; seen.add(sym);
-    out.push({symbol:sym, name:o.name, exch:o.typeName||"국내", type:"kr"});
+    if(isKR){
+      let sym;
+      if(/\.(KS|KQ)$/i.test(rc)) sym=rc.toUpperCase();
+      else { const kq=/코스닥|KOSDAQ/i.test((o.typeName||"")+(o.typeCode||"")); sym=o.code+(kq?".KQ":".KS"); }
+      if(seen.has(sym)) return; seen.add(sym);
+      out.push({symbol:sym, name:o.name, exch:o.typeName||"국내", type:"kr"});
+    } else if(o.nationCode==="USA" || /나스닥|뉴욕|NASDAQ|NYSE|아멕스|AMEX/i.test((o.typeName||"")+(o.nationName||""))){
+      // 미국주식: 티커(영문 코드) 그대로, 한글명 표시
+      let sym=(o.symbolCode||o.code||rc.split('.')[0]||"").toUpperCase();
+      if(!/^[A-Z][A-Z.\-]{0,9}$/.test(sym)) return;
+      if(seen.has(sym)) return; seen.add(sym);
+      out.push({symbol:sym, name:o.name, exch:o.typeName||"미국", type:"us"});
+    }
   });
+  return out;
+}
+// 내장 검색 사전 — 네트워크 없이 즉시 검색(자주 쓰는 국내·미국·코인 종목 보장)
+const KO_STOCKS={"삼성전자":"005930.KS","삼성전자우":"005935.KS","sk하이닉스":"000660.KS","하이닉스":"000660.KS","카카오":"035720.KS","카카오뱅크":"323410.KS","네이버":"035420.KS","naver":"035420.KS","현대차":"005380.KS","기아":"000270.KS","lg에너지솔루션":"373220.KS","엘지에너지솔루션":"373220.KS","삼성바이오로직스":"207940.KS","셀트리온":"068270.KS","한국전력":"015760.KS","한전":"015760.KS","포스코인터내셔널":"047050.KS","포스코홀딩스":"005490.KS","현대모비스":"012330.KS","삼성sdi":"006400.KS","lg화학":"051910.KS","kb금융":"105560.KS","신한지주":"055550.KS","하나금융지주":"086790.KS","삼부토건":"001470.KS","sk스퀘어":"402340.KS","클래시스":"214150.KQ","파미셀":"005690.KS","lg디스플레이":"034220.KS","엘지디스플레이":"034220.KS","두산에너빌리티":"034020.KS","lg전자":"066570.KS","엘지전자":"066570.KS","lg전자우":"066575.KS","한전기술":"052690.KS","삼성물산":"028260.KS","sk텔레콤":"017670.KS","skt":"017670.KS","kt":"030200.KS","삼성전기":"009150.KS","에코프로":"086520.KQ","에코프로비엠":"247540.KQ","알테오젠":"196170.KQ","한미반도체":"042700.KS","대한항공":"003490.KS","현대건설":"000720.KS","두산밥캣":"241560.KS","두산":"000150.KS","lg":"003550.KS","sk":"034730.KS","현대로템":"064350.KS","한화에어로스페이스":"012450.KS","HD현대중공업":"329180.KS"};
+const US_STOCKS={"애플":"AAPL","apple":"AAPL","테슬라":"TSLA","tesla":"TSLA","엔비디아":"NVDA","nvidia":"NVDA","마이크로소프트":"MSFT","microsoft":"MSFT","아마존":"AMZN","amazon":"AMZN","구글":"GOOGL","google":"GOOGL","알파벳":"GOOGL","메타":"META","meta":"META","넷플릭스":"NFLX","netflix":"NFLX","팔란티어":"PLTR","palantir":"PLTR","에이엠디":"AMD","amd":"AMD","인텔":"INTC","intel":"INTC","코인베이스":"COIN","coinbase":"COIN","브로드컴":"AVGO","broadcom":"AVGO","스페이스엑스":"SPCX","spacex":"SPCX","버크셔":"BRK-B","마이크론":"MU"};
+const KO_COINS={"비트코인":"KRW-BTC","bitcoin":"KRW-BTC","btc":"KRW-BTC","이더리움":"KRW-ETH","ethereum":"KRW-ETH","eth":"KRW-ETH","리플":"KRW-XRP","xrp":"KRW-XRP","도지코인":"KRW-DOGE","도지":"KRW-DOGE","doge":"KRW-DOGE","비트토렌트":"KRW-BTT","btt":"KRW-BTT","솔라나":"KRW-SOL","solana":"KRW-SOL","에이다":"KRW-ADA","ada":"KRW-ADA","트론":"KRW-TRX","trx":"KRW-TRX","스텔라루멘":"KRW-XLM","샌드박스":"KRW-SAND","이오스":"KRW-EOS","비체인":"KRW-VET","폴리곤":"KRW-POL","니어프로토콜":"KRW-NEAR","앱토스":"KRW-APT"};
+function searchLocal(q){
+  const lq=q.trim().toLowerCase().replace(/\s/g,'');
+  if(!lq) return [];
+  const out=[]; const seen=new Set();
+  const scan=(dict,type,exch)=>{ for(const k in dict){ const sym=dict[k]; if(seen.has(sym)) continue;
+    if(k.replace(/\s/g,'').includes(lq)||lq.includes(k.replace(/\s/g,''))){ seen.add(sym); out.push({symbol:sym, name:k, exch, type}); } } };
+  scan(KO_STOCKS,"kr","국내"); scan(US_STOCKS,"us","미국"); scan(KO_COINS,"coin","코인");
   return out;
 }
 const searchCache={};
@@ -473,25 +528,37 @@ async function searchSecurities(q){
   if(searchCache[key]) return searchCache[key];
   // 성공/실패를 구분해서 받기 (둘 다 실패면 네트워크 오류로 처리)
   const wrap=p=>p.then(r=>({ok:true,r})).catch(()=>({ok:false,r:[]}));
-  const naverP = withTimeout(wrap(searchNaver(q)), 2500, {ok:false,r:[]});
-  const yahooP = wrap(searchYahoo(q));
-  const [n, y] = await Promise.all([naverP, yahooP]);
+  const local = searchLocal(q);                                              // 즉시(오프라인) 보장
+  const naverP = withTimeout(wrap(searchNaver(q)), 2500, {ok:false,r:[]});   // 국내·해외 한글명
+  const upbitP = withTimeout(wrap(searchUpbit(q)), 2500, {ok:false,r:[]});   // 한글 코인명
+  const yahooP = withTimeout(wrap(searchYahoo(q)), 3000, {ok:false,r:[]});   // 해외·코인(영문)
+  const [n, u, y] = await Promise.all([naverP, upbitP, yahooP]);
   const seen=new Set(); const out=[];
-  [...n.r, ...y.r].forEach(x=>{ const k=x.symbol.toUpperCase(); if(!seen.has(k)){ seen.add(k); out.push(x); } });
+  // 내장 사전 우선 → 네이버/업비트 한글 → Yahoo. 같은 티커 중복 제거
+  [...local, ...n.r, ...u.r, ...y.r].forEach(x=>{ const k=x.symbol.toUpperCase(); if(!seen.has(k)){ seen.add(k); out.push(x); } });
   if(out.length){ searchCache[key]=out; return out; }
-  if(!n.ok && !y.ok) throw new Error("search-network"); // 둘 다 실패 → 검색 실패(결과없음 아님)
-  return []; // 정말로 일치 종목 없음
+  if(!n.ok && !u.ok && !y.ok) throw new Error("search-network");
+  return [];
 }
 
 // 환율: 무료 환율 API 직접 (CORS 허용), 실패 시 Yahoo, 최후 상수
+let fxRates = {KRW:1, USD:1380, EUR:1500};   // 1단위당 원화 (fallback)
+function cur2krw(cur){ return fxRates[cur] || (cur==="KRW"?1:(fxRates.USD||1380)); }
+function curSym(cur){ return cur==="KRW"?"₩":cur==="EUR"?"€":cur==="JPY"?"¥":cur==="GBP"?"£":"$"; }
 async function getUsdKrw(){
   try{
     const r = await fetch("https://open.er-api.com/v6/latest/USD", {cache:"no-store"});
     const d = await r.json();
-    if(d?.rates?.KRW) return d.rates.KRW;
+    if(d?.rates?.KRW){
+      const krwPerUsd = d.rates.KRW;
+      const m = {KRW:1, USD:krwPerUsd};
+      ["EUR","JPY","GBP","HKD","CNY","CAD","AUD","CHF"].forEach(c=>{ if(d.rates[c]) m[c]=krwPerUsd/d.rates[c]; });
+      fxRates = m;
+      return krwPerUsd;
+    }
   }catch(e){}
-  try{ return (await yahooChart("KRW=X")).price; }catch(e){}
-  return 1380;
+  try{ const k=(await yahooChart("KRW=X")).price; fxRates.USD=k; return k; }catch(e){}
+  return fxRates.USD||1380;
 }
 
 function plClass(v){ return v>0?"up":(v<0?"down":"flat"); }
@@ -507,10 +574,10 @@ function computeFromCache(usdkrw, time, stale){
       const sym=(h.symbol||"").trim(); const q=cache[sym];
       if(!sym){ return; }
       if(!q || q.error){ anyErr=true; rows.push({name:h.name||sym, sym, qty:h.qty, hidx:hi, error:true}); return; }
-      const cur=q.currency; const toKRW=(cur==="KRW")?1:usdkrw;
+      const cur=q.currency; const toKRW=cur2krw(cur);   // 통화별 원화 환산(USD·EUR·KRW 등)
       const value1=q.price*toKRW*h.qty;
-      const buyCur=h.buyCur || (cur==="KRW"?"KRW":"USD");
-      const buyToKRW=(buyCur==="KRW")?1:usdkrw;
+      const buyCur=h.buyCur || (cur==="KRW"?"KRW":cur==="EUR"?"EUR":"USD");
+      const buyToKRW=cur2krw(buyCur);
       const cost1=(h.buy||0)*buyToKRW*h.qty;
       const dayChg=q.prevClose>0?(q.price-q.prevClose)/q.prevClose*100:0;
       const tgt=h.target||0;
@@ -584,8 +651,8 @@ const RANK_LAST="#9ca8bb"; // 마지막 순위 = 회색
 function memberColor(i){ return MEMBER_COLORS[((i%MEMBER_COLORS.length)+MEMBER_COLORS.length)%MEMBER_COLORS.length]; }
 function rankColor(n, total){ if(total>1 && n===total) return RANK_LAST; return RANK_COLORS[(n-1)%RANK_COLORS.length]; }
 function memberInitial(name){ return (String(name||"·").trim()[0])||"·"; }
-const CAT_LABEL={kr:"국내주식",us:"미국주식",coin:"코인"};
-const CAT_ICON={kr:"🇰🇷",us:"🇺🇸",coin:"🪙"};
+const CAT_LABEL={kr:"국내주식",us:"해외주식",coin:"코인"};
+const CAT_ICON={kr:"🇰🇷",us:"🌎",coin:"🪙"};
 const CAT_ORDER=["kr","us","coin"];
 let currentCat=null, holdingFrom="member";
 const INDEX_SYMS=[{key:"kospi",label:"KOSPI",sym:"^KS11"},{key:"nasdaq",label:"NASDAQ",sym:"^IXIC"},{key:"sp500",label:"S&P 500",sym:"^GSPC"},{key:"fx",label:"USD/KRW",sym:"KRW=X"}];
@@ -616,7 +683,7 @@ function holdingRowHTML(r,hi,opt){
   const rk=opt.rank?`<span class="rank" style="color:${rkc};border-color:${rkc}">${opt.rank}</span>`:"";
   return `<div class="holding tap" data-h="${hi}">
     <div class="h-left">${rk}<div><div class="h-name">${esc(r.name)} <span class="tkr">${esc(r.sym)}</span></div>
-      <div class="h-meta">${tag}${r.qty}주 · 현재 ${priceStr} <span class="${plClass(r.dayChg)}">${sign(r.dayChg)}${r.dayChg.toFixed(2)}%</span></div></div></div>
+      <div class="h-meta">${tag}${fmtNum(r.qty)}주 · 현재 ${priceStr} <span class="${plClass(r.dayChg)}">${sign(r.dayChg)}${r.dayChg.toFixed(2)}%</span></div></div></div>
     <div class="h-right"><div class="h-vlabel">평가금액</div><div class="h-val">${fmtKRW(r.value)} <span class="chev">›</span></div>
       <div class="h-pl ${plClass(r.pl)}">${sign(r.pl)}${fmtKRW(r.pl).slice(1)}원 (${sign(r.plPct)}${r.plPct.toFixed(1)}%)</div></div></div>`;
 }
@@ -760,6 +827,17 @@ const YINT={'1d':'5m','5d':'30m','1mo':'1d','6mo':'1d','ytd':'1d','1y':'1d','5y'
 let histRange = "6mo";
 function daysSinceYearStart(){ const n=new Date(); return Math.ceil((n-new Date(n.getFullYear(),0,1))/86400000)+1; }
 async function fetchHistory(sym, range){
+  if(isUpbit(sym)){
+    // 업비트 캔들
+    const UMAP={'1d':['minutes/15',96],'5d':['minutes/60',120],'1mo':['days',30],'6mo':['days',180],
+      'ytd':['days',Math.min(daysSinceYearStart(),200)],'1y':['weeks',53],'5y':['months',60],'max':['months',200]};
+    const [path,count]=UMAP[range]||['days',180];
+    const a=await upbitGet(`https://api.upbit.com/v1/candles/${path}?market=${encodeURIComponent(sym)}&count=${count}`);
+    const pts=(a||[]).map(k=>({t:k.timestamp||Date.parse(k.candle_date_time_kst), o:k.opening_price, h:k.high_price, l:k.low_price, c:k.trade_price, v:k.candle_acc_trade_volume}))
+      .filter(p=>isFinite(p.c)).sort((x,y)=>x.t-y.t);  // 업비트는 최신순 → 오래된 순으로 정렬
+    if(!pts.length) throw new Error("hist");
+    return {cur:/^KRW-/i.test(sym)?"KRW":"USD", pts, meta:null};
+  }
   if(isCrypto(sym)){
     const base=sym.replace(/-USD$/i,"").replace(/USDT$/i,"").toUpperCase();
     // [interval, limit]
@@ -783,8 +861,9 @@ async function fetchHistory(sym, range){
 function fmtPrice(v, cur){
   if(v==null||!isFinite(v)) return "-";
   if(cur==="KRW") return "₩"+KRW.format(Math.round(v));
-  if(Math.abs(v)<1) return "$"+v.toLocaleString(undefined,{maximumFractionDigits:6});
-  return "$"+v.toLocaleString(undefined,{maximumFractionDigits:2});
+  const s=curSym(cur);
+  if(Math.abs(v)<1) return s+v.toLocaleString(undefined,{maximumFractionDigits:6});
+  return s+v.toLocaleString(undefined,{maximumFractionDigits:2});
 }
 function fmtVol(v){
   if(v==null||!isFinite(v)) return "-";
@@ -792,6 +871,9 @@ function fmtVol(v){
   if(v>=1e4) return (v/1e4).toFixed(1)+"만";
   return KRW.format(Math.round(v));
 }
+// 사용자가 입력한 값(수량·매수가)을 반올림 없이 그대로 표시 (소수점 최대 8자리, 콤마)
+function fmtNum(v){ return (v==null||!isFinite(v))?"-":Number(v).toLocaleString('en-US',{maximumFractionDigits:8}); }
+function fmtMoneyExact(v, cur){ return curSym(cur)+fmtNum(v); }
 function fmtDate(t, full){
   const d=new Date(t);
   const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
@@ -889,10 +971,10 @@ async function renderHolding(){
     {label:CAT_LABEL[r.cat]||"분류",go:()=>goCat(r.cat)},{label:r.name}]);
   const bcur=r.buyCur||r.cur;
   const priceStr=fmtPrice(r.price, r.cur);
-  const buyStr=fmtPrice(r.buy, bcur);
+  const buyStr=fmtMoneyExact(r.buy, bcur);   // 입력한 매수가 그대로(반올림 없음)
   const prinNative=(r.buy||0)*r.qty;
-  const prinStr=fmtPrice(prinNative, bcur);
-  const valNativeStr=r.cur==="KRW"?fmtKRW(r.valueNative):"$"+r.valueNative.toLocaleString(undefined,{maximumFractionDigits:2});
+  const prinStr=fmtMoneyExact(prinNative, bcur);
+  const valNativeStr=r.cur==="KRW"?fmtKRW(r.valueNative):curSym(r.cur)+r.valueNative.toLocaleString(undefined,{maximumFractionDigits:2});
   const rlabel=RLABEL;
   const stat=(l,v,cls)=>`<div class="stat"><div class="sl">${l}</div><div class="sv ${cls||''}">${v}</div></div>`;
   content.innerHTML=`
@@ -905,7 +987,7 @@ async function renderHolding(){
     <div class="ranges">${RANGES.map(rg=>`<button class="rbtn ${rg.key===histRange?'on':''}" data-r="${rg.key}">${rg.label}</button>`).join('')}</div>
     <div class="panel" style="padding:14px"><div id="chart"><div class="empty"><span class="spin"></span> 차트 불러오는 중...</div></div></div>
     <div class="statgrid">
-      ${stat("보유수량", r.qty+"주")}
+      ${stat("보유수량", fmtNum(r.qty)+"주")}
       ${stat("현재가", priceStr)}
       ${stat("평균매수가", buyStr)}
       ${stat("전일대비", sign(r.dayChg)+r.dayChg.toFixed(2)+"%", plClass(r.dayChg))}
@@ -1032,7 +1114,7 @@ function memberEditor(c,ci){
 }
 function detectType(sym, qt){
   sym=sym||"";
-  if(/-USD$/i.test(sym)||/USDT$/i.test(sym)||qt==="CRYPTOCURRENCY") return "coin";
+  if(isUpbit(sym)||/-USD$/i.test(sym)||/USDT$/i.test(sym)||qt==="CRYPTOCURRENCY") return "coin";
   if(/\.(KS|KQ)$/i.test(sym)) return "kr";
   return "us";
 }
@@ -1047,7 +1129,7 @@ function holdEditor(ci,hi,h){
     <div class="lbl">종류</div>
     <div class="seg">
       ${seg(["국내주식","kr"], type==="kr")}
-      ${seg(["미국주식","us"], type==="us")}
+      ${seg(["해외주식","us"], type==="us")}
       ${seg(["코인","coin"], type==="coin")}
     </div>
     <div class="lbl">종목명 / 검색</div>
@@ -1055,17 +1137,18 @@ function holdEditor(ci,hi,h){
     <input class="syminp" data-c="${ci}" data-h="${hi}" data-f="symbol" placeholder="티커 (검색 선택 시 자동입력)" value="${esc(h.symbol||'')}" autocomplete="off">
     <div class="qtyrow">
       <div><div class="lbl">보유수량</div>
-        <input data-c="${ci}" data-h="${hi}" data-f="qty" type="number" step="any" placeholder="예: 10" value="${h.qty??''}"></div>
+        <input data-c="${ci}" data-h="${hi}" data-f="qty" type="text" inputmode="decimal" placeholder="예: 10" value="${h.qty??''}"></div>
       <div><div class="lbl">평균매수가</div>
-        <input data-c="${ci}" data-h="${hi}" data-f="buy" type="number" step="any" placeholder="1주당 매수가" value="${h.buy??''}"></div>
+        <input data-c="${ci}" data-h="${hi}" data-f="buy" type="text" inputmode="decimal" placeholder="1주당 매수가" value="${h.buy??''}"></div>
       <button class="delx" data-delh="${ci}_${hi}">🗑</button>
     </div>
     <div class="lbl">희망단가 (목표가, 선택)</div>
-    <input data-c="${ci}" data-h="${hi}" data-f="target" type="number" step="any" placeholder="목표로 하는 1주당 가격" value="${h.target??''}">
+    <input data-c="${ci}" data-h="${hi}" data-f="target" type="text" inputmode="decimal" placeholder="목표로 하는 1주당 가격" value="${h.target??''}">
     <div class="lbl">매수가 화폐</div>
     <div class="seg">
       ${segc("원 (₩)","KRW", cur==="KRW")}
       ${segc("달러 ($)","USD", cur==="USD")}
+      ${segc("유로 (€)","EUR", cur==="EUR")}
     </div>`;
   return row;
 }
@@ -1074,7 +1157,7 @@ function readEditor(){
     const ci=+inp.dataset.c, f=inp.dataset.f;
     if(inp.dataset.h!==undefined){
       const hi=+inp.dataset.h; let v=inp.value;
-      if(f==='qty'||f==='buy'||f==='target') v=v===''?0:parseFloat(v);
+      if(f==='qty'||f==='buy'||f==='target'){ const n=parseFloat(String(v).replace(/[,\s]/g,'')); v=isFinite(n)?n:0; }
       state.members[ci].holdings[hi][f]=v;
     } else { state.members[ci].name=inp.value; }
   });
