@@ -20,7 +20,7 @@
     background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
     padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    min-height:100vh; font-size:18px;
+    min-height:100vh; font-size:18px; overflow-x:hidden;
   }
   .wrap{max-width:600px; margin:0 auto; padding:16px 14px 100px;}
   header{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px;}
@@ -35,7 +35,7 @@
     border:1px solid var(--line); border-radius:18px; padding:20px; margin-bottom:18px;
   }
   .totalcard .label{color:var(--muted); font-size:17px;}
-  .totalcard .amount{font-size:42px; font-weight:800; margin:6px 0 4px; letter-spacing:-0.5px;}
+  .totalcard .amount{font-size:clamp(30px,9.5vw,42px); font-weight:800; margin:6px 0 4px; letter-spacing:-0.5px; white-space:nowrap;}
   .totalcard .pl{font-size:21px; font-weight:700;}
   /* member list */
   .member{display:flex; align-items:center; justify-content:space-between; background:var(--card);
@@ -46,7 +46,7 @@
   .m-name{font-size:23px; font-weight:800;}
   .m-meta{font-size:15px; color:var(--muted); margin-top:3px;}
   .m-right{text-align:right; display:flex; align-items:center; gap:8px;}
-  .m-val{font-size:22px; font-weight:800;}
+  .m-val{font-size:clamp(17px,5vw,22px); font-weight:800; white-space:nowrap;}
   .m-pl{font-size:16px; font-weight:600; margin-top:3px;}
   .chev{color:var(--muted); font-size:24px;}
   /* holdings */
@@ -57,7 +57,7 @@
   .h-left .h-meta{font-size:14px; color:var(--muted); margin-top:3px;}
   .h-right{text-align:right;}
   .h-right .h-vlabel{font-size:12px; color:var(--muted); margin-bottom:1px;}
-  .h-right .h-val{font-size:20px; font-weight:700;}
+  .h-right .h-val{font-size:clamp(16px,4.6vw,20px); font-weight:700; white-space:nowrap;}
   .h-right .h-pl{font-size:16px; font-weight:600; margin-top:3px;}
   .panel{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:4px 16px;}
   .holding.tap{cursor:pointer;} .holding.tap:active{opacity:.6;}
@@ -77,7 +77,7 @@
   .cc-top{display:flex; align-items:center; gap:3px; margin-bottom:8px; flex-wrap:wrap;}
   .cc-ico{font-size:18px;} .cc-name{font-size:15px; font-weight:700;}
   .cc-cnt{font-size:13px; color:var(--muted);} .cc-top .chev{margin-left:auto; color:var(--muted); font-size:18px;}
-  .cc-val{font-size:20px; font-weight:800; letter-spacing:-0.3px;}
+  .cc-val{font-size:clamp(13px,4vw,20px); font-weight:800; letter-spacing:-0.3px; white-space:nowrap;}
   .cc-pl{font-size:14px; font-weight:600; margin-top:3px;}
   .h-right .chev{color:var(--muted); font-size:19px; margin-left:2px;}
   .ranges{display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px;}
@@ -156,6 +156,18 @@
   .spin{display:inline-block; width:15px;height:15px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:middle;}
   @keyframes s{to{transform:rotate(360deg)}}
   .lbl{font-size:14px;color:var(--muted);margin:2px 2px 5px;}
+  /* 좁은 폰 최적화 — 한 화면에 알맞게 여백·간격 축소 */
+  @media (max-width:430px){
+    .wrap{padding:12px 11px 100px;}
+    .totalcard{padding:16px;}
+    .catgrid{gap:7px;} .idxgrid{gap:7px;}
+    .catcard{padding:12px 8px;} .idxcard{padding:12px 8px;}
+    .cc-name{font-size:13px;} .cc-cnt{font-size:11px;} .cc-pl{font-size:12px;}
+    .ix-val{font-size:clamp(16px,5vw,21px);} .ix-label{font-size:13px;} .ix-chg{font-size:13px;}
+    .member{padding:15px;} .holding{padding:13px 0;}
+    .m-meta{font-size:14px;} .h-left .h-meta{font-size:13px;}
+    header h1{font-size:22px;}
+  }
   .pingate{position:fixed; inset:0; background:var(--bg); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px;}
   .pinbox{width:100%; max-width:340px; text-align:center;}
   .pintitle{font-size:24px; font-weight:800; margin-bottom:8px;}
@@ -180,30 +192,26 @@
   </header>
   <div class="sub" id="sub">구성원을 눌러 개인별 현황을 확인하세요</div>
   <div id="content"><div class="totalcard"><div class="label">가족 전체 평가금액</div>
-        <div class="amount">₩88,695,216</div>
-        <div class="pl down">-10,139,471,367원 (-99.1%)</div></div>
-        <div class="sechead" style="margin-top:0">📈 시장 지수</div><div class="idxgrid"><div class="idxcard"><div class="ix-label">KOSPI</div><div class="ix-val">8,123.62</div><div class="ix-chg up">+4.63%</div></div><div class="idxcard"><div class="ix-label">NASDAQ</div><div class="ix-val">25,888.84</div><div class="ix-chg up">+0.31%</div></div><div class="idxcard"><div class="ix-label">S&amp;P 500</div><div class="ix-val">7,431.46</div><div class="ix-chg up">+0.50%</div></div><div class="idxcard"><div class="ix-label">USD/KRW</div><div class="ix-val">₩1,518</div><div class="ix-chg up">+0.13%</div></div></div>
+        <div class="amount">₩118,447,436</div>
+        <div class="pl down">-20,653,882원 (-14.8%)</div></div>
+        <div class="sechead" style="margin-top:0">📈 시장 지수</div><div class="idxgrid"><div class="idxcard"><div class="ix-label">KOSPI</div><div class="ix-val">8,123.62</div><div class="ix-chg up">+4.63%</div></div><div class="idxcard"><div class="ix-label">NASDAQ</div><div class="ix-val">25,888.84</div><div class="ix-chg up">+0.31%</div></div><div class="idxcard"><div class="ix-label">S&amp;P 500</div><div class="ix-val">7,431.46</div><div class="ix-chg up">+0.65%</div></div><div class="idxcard"><div class="ix-label">USD/KRW</div><div class="ix-val">₩1,518</div><div class="ix-chg up">+0.13%</div></div></div>
         <div class="sechead">👨‍👩‍👧‍👦 구성원</div><div class="member" data-i="0" style="border-left:6px solid #56c7ff">
           <div class="m-left"><div class="avatar" style="background:#56c7ff26;color:#56c7ff;border:2px solid #56c7ff">여</div>
-            <div><div class="m-name">여이화</div><div class="m-meta">8개 종목</div></div></div>
-          <div class="m-right"><div><div class="m-val">₩51,851,966</div>
-            <div class="m-pl down">-31.1%</div></div><div class="chev">›</div></div></div><div class="member" data-i="1" style="border-left:6px solid #4ade80">
+            <div><div class="m-name">여이화</div><div class="m-meta">23개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩81,604,186</div>
+            <div class="m-pl down">-21.0%</div></div><div class="chev">›</div></div></div><div class="member" data-i="1" style="border-left:6px solid #4ade80">
           <div class="m-left"><div class="avatar" style="background:#4ade8026;color:#4ade80;border:2px solid #4ade80">김</div>
-            <div><div class="m-name">김한솔</div><div class="m-meta">8개 종목</div></div></div>
-          <div class="m-right"><div><div class="m-val">₩13,018,300</div>
-            <div class="m-pl up">+24.7%</div></div><div class="chev">›</div></div></div><div class="member" data-i="2" style="border-left:6px solid #fbbf24">
-          <div class="m-left"><div class="avatar" style="background:#fbbf2426;color:#fbbf24;border:2px solid #fbbf24">김</div>
             <div><div class="m-name">김영롱</div><div class="m-meta">6개 종목</div></div></div>
           <div class="m-right"><div><div class="m-val">₩12,396,250</div>
-            <div class="m-pl down">-99.9%</div></div><div class="chev">›</div></div></div><div class="member" data-i="3" style="border-left:6px solid #fb7185">
+            <div class="m-pl up">+19.3%</div></div><div class="chev">›</div></div></div><div class="member" data-i="2" style="border-left:6px solid #fbbf24">
+          <div class="m-left"><div class="avatar" style="background:#fbbf2426;color:#fbbf24;border:2px solid #fbbf24">김</div>
+            <div><div class="m-name">김한솔</div><div class="m-meta">8개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩13,018,300</div>
+            <div class="m-pl up">+24.7%</div></div><div class="chev">›</div></div></div><div class="member" data-i="3" style="border-left:6px solid #fb7185">
           <div class="m-left"><div class="avatar" style="background:#fb718526;color:#fb7185;border:2px solid #fb7185">김</div>
             <div><div class="m-name">김경민</div><div class="m-meta">6개 종목</div></div></div>
           <div class="m-right"><div><div class="m-val">₩11,428,700</div>
-            <div class="m-pl down">-23.9%</div></div><div class="chev">›</div></div></div><div class="member" data-i="4" style="border-left:6px solid #c084fc">
-          <div class="m-left"><div class="avatar" style="background:#c084fc26;color:#c084fc;border:2px solid #c084fc">새</div>
-            <div><div class="m-name">새 구성원</div><div class="m-meta">0개 종목</div></div></div>
-          <div class="m-right"><div><div class="m-val">₩0</div>
-            <div class="m-pl flat">0.0%</div></div><div class="chev">›</div></div></div></div>
+            <div class="m-pl down">-23.9%</div></div><div class="chev">›</div></div></div></div>
   <div class="updated" id="updated"><span class="spin"></span> 최신 시세 갱신 중...</div>
 </div>
 
@@ -252,11 +260,13 @@ let currentIdx = -1;    // 구성원 index
 let currentHolding = -1;// 종목 index (computed rows 기준)
 let computed = null;     // {members:[{name, value, cost, rows:[]}], total, cost, usdkrw, anyErr, time}
 
-const DATA_VERSION = 3;
+const DATA_VERSION = 4;
 let state = loadState();
 
 // 국내주식 보유내역 한 줄 도우미
 function K(name,symbol,qty,buy,target){ return {name,symbol,qty,buy,target:target||0,type:"kr",buyCur:"KRW"}; }
+function F(name,symbol,qty,buy,cur){ return {name,symbol,qty,buy,target:0,type:"us",buyCur:cur||"USD"}; }   // 해외주식
+function C(name,market,qty,buy){ return {name,symbol:market,qty,buy,target:0,type:"coin",buyCur:"KRW"}; }     // 코인(업비트 원화)
 function DEFAULT_STATE(){
   return { v:DATA_VERSION, members:[
     { name:"여이화", holdings:[
@@ -267,7 +277,24 @@ function DEFAULT_STATE(){
       K("삼부토건","001470.KS",7828,1554,30000),
       K("포스코인터내셔널","047050.KS",169,84139,200000),
       K("현대차","005380.KS",3,615000,750000),
-      K("SK스퀘어","402340.KS",1,1092869,2000000)
+      K("SK스퀘어","402340.KS",1,1092869,2000000),
+      // 해외주식
+      F("마이크론 테크놀로지","MU",2,331.70,"USD"),
+      F("엔비디아","NVD.DE",2,157.32,"EUR"),
+      F("샌디스크","SNDK",3,412.0433,"USD"),
+      F("스페이스X","SPCX",8,151.50,"USD"),
+      // 코인 (업비트 원화)
+      C("비트토렌트","KRW-BTT",134439975.34532607,0.001502),
+      C("페페","KRW-PEPE",22949312.41985675,0.02951),
+      C("도지코인","KRW-DOGE",734.92665431,408.0),
+      C("트론","KRW-TRX",327.55953178,459.0),
+      C("샌드박스","KRW-SAND",1366.16475731,732.9),
+      C("에이다","KRW-ADA",1000.06123478,1150.4),
+      C("디센트럴랜드","KRW-MANA",2405.20415517,1476.1),
+      C("리플","KRW-XRP",7418.95697230,1099.6),
+      C("이더리움클래식","KRW-ETC",132.97932461,43276),
+      C("스텔라루멘","KRW-XLM",3314.33732048,351.9),
+      C("시바이누","KRW-SHIB",48877995.07536007,0.02243)
     ]},
     { name:"김영롱", holdings:[
       K("삼성전자","005930.KS",10,75600,600000),
@@ -321,7 +348,7 @@ function normalize(s){
 function saveState(){ state.v=DATA_VERSION; try{ localStorage.setItem('famstocks', JSON.stringify(state)); }catch(e){} pushRemote(); }
 
 /* ===== Pantry 가족 공유 (클라우드 저장 + 주기적 동기화) ===== */
-const REMOTE = PANTRY_ID ? `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/familyStocks` : null;
+const REMOTE = PANTRY_ID ? `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/familyData2` : null;
 let remoteSuppress=false, pulledOnce=false;
 function applyRemote(incoming){
   remoteSuppress=true;
@@ -441,12 +468,44 @@ async function binanceQuote(sym){
   return { price, prevClose:prev, currency:"USD" };
 }
 
-// 주식: Yahoo chart (프록시 경유)
+// 임의 URL을 프록시로 호출해 원문 텍스트(CSV 등) 반환
+function raceProxyText(url){
+  const urls=PROXIES.map(p=>p(url));
+  return new Promise((resolve,reject)=>{
+    let pending=urls.length, done=false;
+    if(!pending){ reject(); return; }
+    urls.forEach(u=>fetchT(u,7000).then(r=>r.ok?r.text():Promise.reject())
+      .then(t=>{ if(done) return; if(t && t.length>3){ done=true; resolve(t); } else if(--pending===0) reject(); })
+      .catch(()=>{ if(!done && --pending===0) reject(); }));
+  });
+}
+// 미국주식 폴백: Stooq (야후가 못 줄 때)
+async function stooqQuote(sym){
+  const base=sym.split('.')[0].toLowerCase();
+  const txt=await raceProxyText(`https://stooq.com/q/l/?s=${base}.us&f=sd2t2ohlcv&e=csv`);
+  const lines=txt.trim().split(/\r?\n/);
+  const row=(lines[1]||lines[0]||"").split(",");  // Symbol,Date,Time,Open,High,Low,Close,Volume
+  const close=parseFloat(row[6]), open=parseFloat(row[3]);
+  if(!isFinite(close) || close<=0) throw new Error("stooq");
+  return { price:close, prevClose:isFinite(open)&&open>0?open:close, currency:"USD" };
+}
+// 주식: Yahoo chart (프록시 경유) — 캐시 무력화 + 1d/5d 재시도 + 종가 폴백
 async function yahooChart(symbol){
-  const data = await proxyFetch(`/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`);
-  const m = data?.chart?.result?.[0]?.meta;
-  if(m && m.regularMarketPrice!=null){
-    return { price:m.regularMarketPrice, prevClose:(m.chartPreviousClose ?? m.previousClose ?? m.regularMarketPrice), currency:m.currency || "USD" };
+  for(const range of ['1d','5d']){
+    let data;
+    try{ data = await proxyFetch(`/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&_=${Date.now()}`); }
+    catch(e){ continue; }
+    const res = data?.chart?.result?.[0];
+    const m = res?.meta;
+    if(m && m.regularMarketPrice!=null){
+      return { price:m.regularMarketPrice, prevClose:(m.chartPreviousClose ?? m.previousClose ?? m.regularMarketPrice), currency:m.currency || "USD" };
+    }
+    // meta에 현재가가 없으면 종가 배열의 마지막 값 사용
+    const cl = res?.indicators?.quote?.[0]?.close;
+    if(Array.isArray(cl)){
+      const last = [...cl].reverse().find(x=>x!=null);
+      if(last!=null) return { price:last, prevClose:last, currency:(m&&m.currency)||"USD" };
+    }
   }
   throw new Error("시세 없음");
 }
@@ -456,7 +515,11 @@ async function fetchQuote(symbol){
   const sym=(symbol||"").trim();
   if(isUpbit(sym)){ try{ return await upbitQuote(sym); }catch(e){} }
   else if(isCrypto(sym)){ try{ return await binanceQuote(sym); }catch(e){} }
-  return await yahooChart(sym);
+  try{ return await yahooChart(sym); }
+  catch(e){
+    if(!/\./.test(sym)){ try{ return await stooqQuote(sym); }catch(e2){} } // 야후 실패 시 미국주식 폴백(Stooq)
+    throw e;
+  }
 }
 
 // 절대 URL을 여러 프록시로 동시에 호출 (가장 먼저 성공)
