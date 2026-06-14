@@ -165,6 +165,11 @@
   .pinbox input:focus{border-color:var(--accent); outline:none;}
   .pinerr{color:#fca5a5; font-size:14px; min-height:20px; margin:10px 0;}
   .pinbox .btn{width:100%; padding:16px; font-size:18px;}
+  .syncbanner{position:fixed; top:0; left:0; right:0; z-index:90; background:#1e3a5f; border-bottom:1px solid var(--accent);
+    padding:12px 14px calc(12px + env(safe-area-inset-top)); display:flex; flex-direction:column; gap:10px; align-items:center;}
+  .syncbanner .sb-txt{font-size:15px; font-weight:600; text-align:center;}
+  .syncbanner .sb-btns{display:flex; gap:10px;}
+  .syncbanner .btn{padding:10px 14px; font-size:15px;}
 </style>
 </head>
 <body>
@@ -173,9 +178,33 @@
     <h1 id="title">👨‍👩‍👧‍👦 가족 주식 현황</h1>
     <button class="iconbtn" id="editBtn" title="설정">⚙️</button>
   </header>
-  <div class="sub" id="sub">실시간 시세 · 한국주식 · 미국주식 · 코인</div>
-  <div id="content"></div>
-  <div class="updated" id="updated"></div>
+  <div class="sub" id="sub">구성원을 눌러 개인별 현황을 확인하세요</div>
+  <div id="content"><div class="totalcard"><div class="label">가족 전체 평가금액</div>
+        <div class="amount">₩88,695,216</div>
+        <div class="pl down">-11,146,428,163원 (-99.2%)</div></div>
+        <div class="sechead" style="margin-top:0">📈 시장 지수</div><div class="idxgrid"><div class="idxcard"><div class="ix-label">KOSPI</div><div class="ix-val">8,123.62</div><div class="ix-chg up">+4.63%</div></div><div class="idxcard"><div class="ix-label">NASDAQ</div><div class="ix-val">25,888.84</div><div class="ix-chg up">+0.31%</div></div><div class="idxcard"><div class="ix-label">S&amp;P 500</div><div class="ix-val">7,431.46</div><div class="ix-chg up">+0.50%</div></div><div class="idxcard"><div class="ix-label">USD/KRW</div><div class="ix-val">₩1,518</div><div class="ix-chg up">+0.13%</div></div></div>
+        <div class="sechead">👨‍👩‍👧‍👦 구성원</div><div class="member" data-i="0" style="border-left:6px solid #56c7ff">
+          <div class="m-left"><div class="avatar" style="background:#56c7ff26;color:#56c7ff;border:2px solid #56c7ff">여</div>
+            <div><div class="m-name">여이화</div><div class="m-meta">8개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩51,851,966</div>
+            <div class="m-pl down">-31.1%</div></div><div class="chev">›</div></div></div><div class="member" data-i="1" style="border-left:6px solid #4ade80">
+          <div class="m-left"><div class="avatar" style="background:#4ade8026;color:#4ade80;border:2px solid #4ade80">김</div>
+            <div><div class="m-name">김한솔</div><div class="m-meta">8개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩13,018,300</div>
+            <div class="m-pl up">+24.7%</div></div><div class="chev">›</div></div></div><div class="member" data-i="2" style="border-left:6px solid #fbbf24">
+          <div class="m-left"><div class="avatar" style="background:#fbbf2426;color:#fbbf24;border:2px solid #fbbf24">김</div>
+            <div><div class="m-name">김영롱</div><div class="m-meta">6개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩12,396,250</div>
+            <div class="m-pl down">-99.9%</div></div><div class="chev">›</div></div></div><div class="member" data-i="3" style="border-left:6px solid #fb7185">
+          <div class="m-left"><div class="avatar" style="background:#fb718526;color:#fb7185;border:2px solid #fb7185">김</div>
+            <div><div class="m-name">김경민</div><div class="m-meta">6개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩11,428,700</div>
+            <div class="m-pl down">-23.9%</div></div><div class="chev">›</div></div></div><div class="member" data-i="4" style="border-left:6px solid #c084fc">
+          <div class="m-left"><div class="avatar" style="background:#c084fc26;color:#c084fc;border:2px solid #c084fc">새</div>
+            <div><div class="m-name">새 구성원</div><div class="m-meta">0개 종목</div></div></div>
+          <div class="m-right"><div><div class="m-val">₩0</div>
+            <div class="m-pl flat">0.0%</div></div><div class="chev">›</div></div></div></div>
+  <div class="updated" id="updated">업데이트 오후 6:14:44 · 환율 ₩1,517/$</div>
 </div>
 
 <div class="bar">
@@ -289,11 +318,18 @@ function normalize(s){
   if(s.children) return {members:s.children};
   return {members:[]};
 }
-function saveState(){ state.v=DATA_VERSION; localStorage.setItem('famstocks', JSON.stringify(state)); pushRemote(); }
+function saveState(){ state.v=DATA_VERSION; try{ localStorage.setItem('famstocks', JSON.stringify(state)); }catch(e){} pushRemote(); }
 
 /* ===== Pantry 가족 공유 (클라우드 저장 + 주기적 동기화) ===== */
 const REMOTE = PANTRY_ID ? `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/familyStocks` : null;
 let remoteSuppress=false;
+function applyRemote(incoming){
+  remoteSuppress=true;
+  state = incoming; state.v=DATA_VERSION;
+  try{ localStorage.setItem('famstocks', JSON.stringify(state)); }catch(e){}
+  remoteSuppress=false;
+  refresh();
+}
 async function pullRemote(){
   if(!REMOTE) return;
   try{
@@ -301,19 +337,11 @@ async function pullRemote(){
     if(r.status===400 || r.status===404){ pushRemote(); return; } // 클라우드에 없으면 현재 데이터로 생성
     if(!r.ok) return;
     const v = await r.json();
-    if(v && v.members){
-      const incoming = normalize(v);
-      const a = JSON.stringify(Object.assign({}, incoming, {v:0}));
-      const b = JSON.stringify(Object.assign({}, state, {v:0}));
-      if(a!==b){
-        // 다른 가족이 수정한 내용 → 내 화면에 반영
-        remoteSuppress=true;
-        state = incoming; state.v=DATA_VERSION;
-        localStorage.setItem('famstocks', JSON.stringify(state));
-        remoteSuppress=false;
-        refresh();
-      }
-    }
+    if(!(v && v.members)) return;
+    const incoming = normalize(v);
+    const a = JSON.stringify(Object.assign({}, incoming, {v:0}));
+    const b = JSON.stringify(Object.assign({}, state, {v:0}));
+    if(a!==b) applyRemote(incoming);   // 항상 클라우드 최신으로 반영
   }catch(e){}
 }
 async function pushRemote(){
@@ -1178,13 +1206,16 @@ function pinGate(done){
     <div class="pinerr" id="pinErr"></div>
     <button class="btn green" id="pinBtn">확인</button></div>`;
   document.body.appendChild(ov);
-  const inp=ov.querySelector('#pinInput'), btn=ov.querySelector('#pinBtn'), err=ov.querySelector('#pinErr');
+  const inp=document.getElementById('pinInput'), btn=document.getElementById('pinBtn'), err=document.getElementById('pinErr');
   function tryPin(){
-    if(inp.value===APP_PIN){ localStorage.setItem('fam_unlocked','1'); ov.remove(); done(); }
-    else { err.textContent='비밀번호가 틀렸어요. 다시 입력하세요.'; inp.value=''; inp.focus(); }
+    const v=(inp.value||'').replace(/\s/g,'');
+    if(v===String(APP_PIN)){ try{ localStorage.setItem('fam_unlocked','1'); }catch(e){} ov.remove(); done(); }
+    else if(v.length>=4){ err.textContent='비밀번호가 틀렸어요. 다시 입력하세요.'; inp.value=''; inp.focus(); }
   }
-  btn.onclick=tryPin;
-  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tryPin(); });
+  btn.addEventListener('click', tryPin);
+  btn.addEventListener('touchend', function(e){ e.preventDefault(); tryPin(); });
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); tryPin(); } });
+  inp.addEventListener('input', ()=>{ if((inp.value||'').replace(/\s/g,'').length>=4) tryPin(); }); // 4자리 입력 시 자동 확인
   setTimeout(()=>inp.focus(),100);
 }
 function startApp(){
@@ -1194,12 +1225,7 @@ function startApp(){
   setInterval(refresh, 60000);
 }
 pinGate(startApp);
-</script><div class="pingate"><div class="pinbox">
-    <div class="pintitle">🔒 가족 주식 현황</div>
-    <div class="pinsub">비밀번호 4자리를 입력하세요</div>
-    <input id="pinInput" type="tel" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••">
-    <div class="pinerr" id="pinErr"></div>
-    <button class="btn green" id="pinBtn">확인</button></div></div>
+</script>
 
 
 </body></html>
